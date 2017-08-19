@@ -1,5 +1,7 @@
 package com.pecuyu.custombuttonview;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
@@ -8,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Build;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -27,11 +30,12 @@ public class CustomButtonView extends View {
 
     private int TYPE_START = 0;
     private int TYPE_STOP = 1;
-    private int curType = TYPE_START;
+    private int curType = TYPE_STOP;
     private float fraction = 0.0f;
     private float radius;
     private String msgText = "";
     private String btnText = "点击开始录屏";
+    private boolean isInCycle = false;
 
     public CustomButtonView(Context context) {
         this(context, null);
@@ -136,14 +140,21 @@ public class CustomButtonView extends View {
     }
 
 
+    /**
+     * 获取圆得半径
+     * @return
+     */
     private int getRadius() {
         return Math.min(getWidth() / 2, getHeight() / 2);
     }
 
     private int color = getResources().getColor(R.color.color_start);
 
+    /**
+     * 点击开始时的颜色变化动画效果
+     */
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    private void startAnimation() {
+    private void onStartColorAnimation() {
         ValueAnimator animator = ValueAnimator.ofArgb(getResources().getColor(R.color.color_start), getResources().getColor(R.color.color_stop));
         animator.setEvaluator(new ArgbEvaluator());
         animator.setInterpolator(new LinearInterpolator());
@@ -156,10 +167,14 @@ public class CustomButtonView extends View {
             }
         });
         animator.start();
+
     }
 
+    /**
+     * 点击结束时的颜色变化动画效果
+     */
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    private void stopAnimation() {
+    private void onStopColorAnimation() {
         ValueAnimator animator = ValueAnimator.ofArgb(getResources().getColor(R.color.color_stop), getResources().getColor(R.color.color_start));
         animator.setEvaluator(new ArgbEvaluator());
         animator.setInterpolator(new LinearInterpolator());
@@ -170,6 +185,14 @@ public class CustomButtonView extends View {
                 color = (int) animation.getAnimatedValue();
                 invalidate();
             }
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                    startButtonViewAnimatedBreathCycle();
+            }
+
         });
         animator.start();
     }
@@ -189,16 +212,17 @@ public class CustomButtonView extends View {
 
         @Override
         public boolean onSingleTapUp(MotionEvent e) {
-            if (curType == TYPE_START) {
+            if (curType == TYPE_STOP) {
                 Log.e("TAG", "onSingleTapUp");
-                zoomInOrOutAnimation(true);
-                startAnimation();
-                curType = TYPE_STOP;
-                if (listener != null) listener.onStart();
-            } else if (curType == TYPE_STOP) {
-                zoomInOrOutAnimation(false);
-                stopAnimation();
+                cancelButtonViewBreathAnimatedCycle();
                 curType = TYPE_START;
+                onStartColorAnimation();
+                zoomInOrOutAnimation(true);
+                if (listener != null) listener.onStart();
+            } else if (curType == TYPE_START) {
+                curType = TYPE_STOP;
+                zoomInOrOutAnimation(false);
+                onStopColorAnimation();
                 if (listener != null) listener.onStop();
             }
             return true;
@@ -227,6 +251,11 @@ public class CustomButtonView extends View {
         return consume;
     }
 
+    /**
+     * 缩放
+     *
+     * @param in
+     */
     public void zoomInOrOutAnimation(final boolean in) {
         ValueAnimator animator = ValueAnimator.ofFloat(0, 1);
         animator.setInterpolator(new OvershootInterpolator());
@@ -256,6 +285,9 @@ public class CustomButtonView extends View {
         postInvalidate();
     }
 
+    /**
+     * 状态改变监听
+     */
     public interface OnStateChangeListener {
         /**
          * 开始时调用
@@ -272,5 +304,49 @@ public class CustomButtonView extends View {
 
     public void setOnStateChangeListener(OnStateChangeListener listener) {
         this.listener = listener;
+    }
+
+    ValueAnimator cycleAnimator;
+
+    /**
+     * 开始按钮呼吸动画效果
+     */
+    private void startButtonViewAnimatedBreathCycle() {
+        if (curType==TYPE_START) {
+            return;
+        }
+        cycleAnimator = ValueAnimator.ofFloat(1, 0);
+        cycleAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        cycleAnimator.setRepeatMode(ValueAnimator.REVERSE);
+        cycleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                if (curType == TYPE_START) cycleAnimator.cancel();
+                fraction = 1.0f - animation.getAnimatedFraction() * 0.2f;
+                radius = getRadius() * fraction;
+                invalidate();
+            }
+        });
+        cycleAnimator.setDuration(1500);
+        cycleAnimator.start();
+    }
+
+    /**
+     * 取消按钮呼吸效果
+     */
+    private void cancelButtonViewBreathAnimatedCycle() {
+        if (cycleAnimator != null && cycleAnimator.isRunning()) {
+            cycleAnimator.cancel();
+        }
+    }
+
+    @Override
+    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        if (visibility == VISIBLE) {    // view可见时开启呼吸效果
+            startButtonViewAnimatedBreathCycle();
+        } else {
+            cancelButtonViewBreathAnimatedCycle();
+        }
     }
 }
