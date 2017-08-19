@@ -30,8 +30,8 @@ public class CustomButtonView extends View {
     private int curType = TYPE_START;
     private float fraction = 0.0f;
     private float radius;
-    private String msgText = "正在录屏...";
-    private String btnText = "点击暂停";
+    private String msgText = "";
+    private String btnText = "点击开始录屏";
 
     public CustomButtonView(Context context) {
         this(context, null);
@@ -56,6 +56,12 @@ public class CustomButtonView extends View {
         int width = measureWidth(widthMeasureSpec);
         int height = measureHeight(heightMeasureSpec);
         setMeasuredDimension(width, height);
+
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
         radius = getRadius();
     }
 
@@ -188,10 +194,12 @@ public class CustomButtonView extends View {
                 zoomInOrOutAnimation(true);
                 startAnimation();
                 curType = TYPE_STOP;
+                if (listener != null) listener.onStart();
             } else if (curType == TYPE_STOP) {
                 zoomInOrOutAnimation(false);
                 stopAnimation();
                 curType = TYPE_START;
+                if (listener != null) listener.onStop();
             }
             return true;
         }
@@ -236,5 +244,33 @@ public class CustomButtonView extends View {
         });
         animator.setDuration(1500);
         animator.start();
+    }
+
+    public void setMsgText(String msgText) {
+        this.msgText = msgText;
+        postInvalidate();
+    }
+
+    public void setBtnText(String btnText) {
+        this.btnText = btnText;
+        postInvalidate();
+    }
+
+    public interface OnStateChangeListener {
+        /**
+         * 开始时调用
+         */
+        void onStart();
+
+        /**
+         * 结束时调用
+         */
+        void onStop();
+    }
+
+    private OnStateChangeListener listener;
+
+    public void setOnStateChangeListener(OnStateChangeListener listener) {
+        this.listener = listener;
     }
 }
